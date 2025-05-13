@@ -1,0 +1,77 @@
+{
+  "andrei_popa": {
+    "id": "1001",
+    "nume": "Popa",
+    "prenume": "Andrei"
+  },
+  "maria_stoica": {
+    "id": "1002",
+    "nume": "Stoica",
+    "prenume": "Maria"
+  },
+  "ion_ilie": {
+    "id": "1003",
+    "nume": "Ilie",
+    "prenume": "Ion"
+  },
+  "elena_matei": {
+    "id": "1004",
+    "nume": "Matei",
+    "prenume": "Elena"
+  },
+  "cosmin_dumitru": {
+    "id": "1005",
+    "nume": "Dumitru",
+    "prenume": "Cosmin"
+  },
+  "roxana_ionescu": {
+    "id": "1006",
+    "nume": "Ionescu",
+    "prenume": "Roxana"
+  },
+  "daniel_radu": {
+    "id": "1007",
+    "nume": "Radu",
+    "prenume": "Daniel"
+  },
+  "alina_muresan": {
+    "id": "1008",
+    "nume": "Mureșan",
+    "prenume": "Alina"
+  },
+  "bogdan_toma": {
+    "id": "1009",
+    "nume": "Toma",
+    "prenume": "Bogdan"
+  },
+  "ioana_ciobanu": {
+    "id": "1010",
+    "nume": "Ciobanu",
+    "prenume": "Ioana"
+  },
+  "george_marin": {
+    "id": "1011",
+    "nume": "Marin",
+    "prenume": "George"
+  },
+  "adina_dragomir": {
+    "id": "1012",
+    "nume": "Dragomir",
+    "prenume": "Adina"
+  },
+  "rares_oprea": {
+    "id": "1013",
+    "nume": "Oprea",
+    "prenume": "Rareș"
+  },
+  "simona_vlad": {
+    "id": "1014",
+    "nume": "Vlad",
+    "prenume": "Simona"
+  },
+  "vlad_neagu": {
+    "id": "1015",
+    "nume": "Neagu",
+    "prenume": "Vlad"
+  }
+}
