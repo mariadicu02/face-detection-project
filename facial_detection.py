@@ -5,9 +5,6 @@ import numpy as np
 import warnings
 from glob import glob
 
-
-
-
 # Suprimă warning-urile
 os.environ["OPENCV_VIDEOIO_DEBUG"] = "0"
 os.environ["GST_DEBUG"] = "0"
@@ -15,11 +12,14 @@ warnings.filterwarnings("ignore")
 
 print("[INFO] Începem inițializarea...")
 
-# Inițializează detectorul de fețe Dlib
+# Verifică dacă modelele există
+if not os.path.exists("shape_predictor_68_face_landmarks.dat") or not os.path.exists("dlib_face_recognition_resnet_model_v1.dat"):
+    print("[EROARE] Fisierele .dat lipsesc! Asigură-te că sunt în același folder cu scriptul.")
+    exit()
+
+# Inițializare Dlib
 detector = dlib.get_frontal_face_detector()
-# Inițializează predictorul de puncte faciale
 predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
-# Inițializează modelul de recunoaștere facială Dlib
 recognizer = dlib.face_recognition_model_v1("dlib_face_recognition_resnet_model_v1.dat")
 
 faces = []
@@ -27,16 +27,20 @@ label_names = {}
 
 print("[INFO] Începem încărcarea imaginilor din folderul 'poze/'...")
 
+# Procesare imagini
 for idx, filename in enumerate(glob("poze/*.*")):
     img = cv2.imread(filename)
-    
-    detected_faces = detector(img)
-
-    if len(detected_faces) == 0:
-        print(f"[AVERTISMENT] Nu s-a detectat nicio față în: {filename}")
+    if img is None:
+        print(f"[AVERTISMENT] Imagine invalidă sau coruptă: {filename}")
         continue
 
-    shape = predictor(img, detected_faces[0])
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    detected_faces = detector(gray)
+    if len(detected_faces) == 0:
+        print(f"[AVERTISMENT] Nicio față detectată în: {filename}")
+        continue
+
+    shape = predictor(img, detected_faces[0])  # trimitem imaginea color
     face_descriptor = recognizer.compute_face_descriptor(img, shape)
 
     name = os.path.splitext(os.path.basename(filename))[0]
@@ -45,11 +49,19 @@ for idx, filename in enumerate(glob("poze/*.*")):
     print(f"[INFO] Imagine procesată: {filename} -> Etichetă: {name}")
 
 print("[INFO] Accesăm camera video...")
-cap = cv2.VideoCapture(0)
+
+# Deschide camera
+cap = cv2.VideoCapture("/dev/video0", cv2.CAP_V4L2)
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+cap.set(cv2.CAP_PROP_FPS, 10)
 
 if not cap.isOpened():
     print("[EROARE] Nu se poate deschide camera.")
     exit()
+
+frame_count = 0
+process_every_n_frames = 5
 
 while True:
     ret, frame = cap.read()
@@ -58,22 +70,29 @@ while True:
         break
 
     frame = cv2.flip(frame, 1)
-    detected_faces = detector(frame)
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-    for face in detected_faces:
-        shape = predictor(frame, face)
-        face_descriptor = recognizer.compute_face_descriptor(frame, shape)
+    if frame_count % process_every_n_frames == 0:
+        detected_faces = detector(gray)
 
-        distances = [np.linalg.norm(np.array(face_descriptor) - np.array(f)) for f in faces]
-        min_dist = min(distances)
-        id_ = distances.index(min_dist)
+        for face in detected_faces:
+            shape = predictor(frame, face)  # trimitem imaginea color
+            face_descriptor = recognizer.compute_face_descriptor(frame, shape)
 
-        name = label_names.get(id_, "Necunoscut") if min_dist < 0.6 else "Necunoscut"
-        color = (0, 255, 0) if min_dist < 0.6 else (0, 0, 255)
+            distances = [np.linalg.norm(np.array(face_descriptor) - np.array(f)) for f in faces]
+            min_dist = min(distances) if distances else float("inf")
+            id_ = distances.index(min_dist) if distances else -1
 
-        cv2.rectangle(frame, (face.left(), face.top()), (face.right(), face.bottom()), color, 2)
-        cv2.putText(frame, f"{name} ({round(min_dist, 2)})", (face.left(), face.top() - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
+            name = label_names.get(id_, "Necunoscut") if min_dist < 0.6 else "Necunoscut"
+            color = (0, 255, 0) if name != "Necunoscut" else (0, 0, 255)
 
+            cv2.rectangle(frame, (face.left(), face.top()), (face.right(), face.bottom()), color, 2)
+            cv2.putText(frame, f"{name} ({round(min_dist, 2)})", (face.left(), face.top() - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+
+            print(f"[DEBUG] Față detectată: {name} | Distanță: {min_dist:.4f}")
+
+    frame_count += 1
     cv2.imshow('Camera Live - Face Recognition', frame)
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
