@@ -11,7 +11,7 @@ from glob import glob
 MOODLE_URL = "https://moodle.exemplu.ro/webservice/rest/server.php"
 MOODLE_TOKEN = "TOKENUL_TAU_AICI"
 MOODLE_FUNCTION = "core_user_update_users"  # exemplu, poate fi altul
-STUDENT_DATA_FILE = "students.json"
+STUDENT_DATA_FILE = "studenti.json"
 
 # Suprimă warning-urile
 os.environ["OPENCV_VIDEOIO_DEBUG"] = "0"
@@ -128,7 +128,7 @@ while True:
                 trimite_la_moodle(student_id)
 
     frame_count += 1
-    cv2.imshow('Live - Recunoaștere Facială', frame)
+    cv2.imshow('Live - Recunoastere Faciala', frame)
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
