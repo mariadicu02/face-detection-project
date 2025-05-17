@@ -2,76 +2,106 @@
   "andrei_popa": {
     "id": "1001",
     "nume": "Popa",
-    "prenume": "Andrei"
+    "prenume": "Andrei",
+    "email": "andrei.popa@student.upt.ro",
+    "parola": "AndreiPopa@1"
   },
   "maria_stoica": {
     "id": "1002",
     "nume": "Stoica",
-    "prenume": "Maria"
+    "prenume": "Maria",
+    "email": "maria.stoica@student.upt.ro",
+    "parola": "MariaStoica@1"
   },
   "ion_ilie": {
     "id": "1003",
     "nume": "Ilie",
-    "prenume": "Ion"
+    "prenume": "Ion",
+    "email": "ion.ilie@student.upt.ro",
+    "parola": "IonIlie@1"
   },
   "elena_matei": {
     "id": "1004",
     "nume": "Matei",
-    "prenume": "Elena"
+    "prenume": "Elena",
+    "email": "elena.matei@student.upt.ro",
+    "parola": "ElenaMatei@1"
   },
   "cosmin_dumitru": {
     "id": "1005",
     "nume": "Dumitru",
-    "prenume": "Cosmin"
+    "prenume": "Cosmin",
+    "email": "cosmin.dumitru@student.upt.ro",
+    "parola": "CosminDumitru@1"
   },
   "roxana_ionescu": {
     "id": "1006",
     "nume": "Ionescu",
-    "prenume": "Roxana"
+    "prenume": "Roxana",
+    "email": "roxana.ionescu@student.upt.ro",
+    "parola": "RoxanaIonescu@1"
   },
   "daniel_radu": {
     "id": "1007",
     "nume": "Radu",
-    "prenume": "Daniel"
+    "prenume": "Daniel",
+    "email": "daniel.radu@student.upt.ro",
+    "parola": "DanielRadu@1"
   },
   "alina_muresan": {
     "id": "1008",
     "nume": "Mureșan",
-    "prenume": "Alina"
+    "prenume": "Alina",
+    "email": "alina.muresan@student.upt.ro",
+    "parola": "AlinaMureșan@1"
   },
   "bogdan_toma": {
     "id": "1009",
     "nume": "Toma",
-    "prenume": "Bogdan"
+    "prenume": "Bogdan",
+    "email": "bogdan.toma@student.upt.ro",
+    "parola": "BogdanToma@1"
   },
   "ioana_ciobanu": {
     "id": "1010",
     "nume": "Ciobanu",
-    "prenume": "Ioana"
+    "prenume": "Ioana",
+    "email": "ioana.ciobanu@student.upt.ro",
+    "parola": "IoanaCiobanu@1"
   },
   "george_marin": {
     "id": "1011",
     "nume": "Marin",
-    "prenume": "George"
+    "prenume": "George",
+    "email": "george.marin@student.upt.ro",
+    "parola": "GeorgeMarin@1"
   },
   "adina_dragomir": {
     "id": "1012",
     "nume": "Dragomir",
-    "prenume": "Adina"
+    "prenume": "Adina",
+    "email": "adina.dragomir@student.upt.ro",
+    "parola": "AdinaDragomir@1"
   },
   "rares_oprea": {
     "id": "1013",
     "nume": "Oprea",
-    "prenume": "Rareș"
+    "prenume": "Rareș",
+    "email": "rares.oprea@student.upt.ro",
+    "parola": "RareșOprea@1"
   },
   "simona_vlad": {
     "id": "1014",
     "nume": "Vlad",
-    "prenume": "Simona"
+    "prenume": "Simona",
+    "email": "simona.vlad@student.upt.ro",
+    "parola": "SimonaVlad@1"
   },
   "vlad_neagu": {
     "id": "1015",
     "nume": "Neagu",
-    "prenume": "Vlad"
+    "prenume": "Vlad",
+    "email": "vlad.neagu@student.upt.ro",
+    "parola": "VladNeagu@1"
   }
 }

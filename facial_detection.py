@@ -6,34 +6,38 @@ import warnings
 import json
 import requests
 from glob import glob
+from datetime import datetime
 
-# CONFIGURARE
-MOODLE_URL = "https://moodle.exemplu.ro/webservice/rest/server.php"
-MOODLE_TOKEN = "TOKENUL_TAU_AICI"
-MOODLE_FUNCTION = "core_user_update_users"  # exemplu, poate fi altul
+# =================== CONFIGURARE ===================
+MOODLE_URL = "http://192.168.1.135/moodle/webservice/rest/server.php"
+MOODLE_TOKEN = "5a987e634310317873b8831b2faeaded"
+COURSE_ID = 789
 STUDENT_DATA_FILE = "studenti.json"
 
-# Suprimă warning-urile
+# =================== SUPRIMARE WARNINGS ===================
 os.environ["OPENCV_VIDEOIO_DEBUG"] = "0"
 os.environ["GST_DEBUG"] = "0"
 warnings.filterwarnings("ignore")
 
 print("[INFO] Începem inițializarea...")
 
-# Verifică fișiere
+# =================== VERIFICĂ FISIERE NECESARE ===================
 if not os.path.exists("shape_predictor_68_face_landmarks.dat") or not os.path.exists("dlib_face_recognition_resnet_model_v1.dat"):
     print("[EROARE] Fisierele .dat lipsesc!")
     exit()
 
-# Încarcă baza de date a studenților
 if not os.path.exists(STUDENT_DATA_FILE):
     print("[EROARE] students.json lipsește!")
     exit()
 
+# =================== ÎNCARCĂ DATE STUDENȚI ===================
 with open(STUDENT_DATA_FILE, "r", encoding="utf-8") as f:
     student_data = json.load(f)
 
-# Inițializare Dlib
+# =================== FUNCȚII MOODLE ===================
+
+
+# =================== INIȚIALIZARE RECUNOAȘTERE FACIALĂ ===================
 detector = dlib.get_frontal_face_detector()
 predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
 recognizer = dlib.face_recognition_model_v1("dlib_face_recognition_resnet_model_v1.dat")
@@ -43,7 +47,6 @@ label_names = {}
 
 print("[INFO] Încărcăm imaginile din 'poze/'...")
 
-# Antrenare
 for idx, filename in enumerate(glob("poze/*.*")):
     img = cv2.imread(filename)
     if img is None:
@@ -65,6 +68,7 @@ for idx, filename in enumerate(glob("poze/*.*")):
     else:
         print(f"[AVERTISMENT] {name} nu există în students.json")
 
+# =================== PORNEȘTE CAMERA ===================
 print("[INFO] Pornim camera...")
 
 cap = cv2.VideoCapture("/dev/video0", cv2.CAP_V4L2)
@@ -78,26 +82,9 @@ if not cap.isOpened():
 
 frame_count = 0
 process_every_n_frames = 5
-trimisi_la_moodle = set()
+studenti_marcati = set()
 
-def trimite_la_moodle(student_id):
-    if student_id in trimisi_la_moodle:
-        return
-
-    trimisi_la_moodle.add(student_id)
-    payload = {
-        'wstoken': MOODLE_TOKEN,
-        'wsfunction': MOODLE_FUNCTION,
-        'moodlewsrestformat': 'json',
-        'users[0][idnumber]': student_id
-    }
-
-    try:
-        response = requests.post(MOODLE_URL, data=payload)
-        print(f"[MOODLE] Trimis ID: {student_id} -> Status: {response.status_code}")
-    except Exception as e:
-        print(f"[EROARE] Trimitere Moodle eșuată: {e}")
-
+# =================== BUCLE VIDEO PRINCIPAL ===================
 while True:
     ret, frame = cap.read()
     if not ret:
@@ -123,9 +110,9 @@ while True:
             cv2.rectangle(frame, (face.left(), face.top()), (face.right(), face.bottom()), color, 2)
             cv2.putText(frame, name, (face.left(), face.top() - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
 
-            if name != "Necunoscut":
-                student_id = student_data[name]["id"]
-                trimite_la_moodle(student_id)
+            if name != "Necunoscut" and name not in studenti_marcati:
+                student_id = int(student_data[name]["id"])
+                print(f"[RECUNOSCUT ✅] {name} (ID: {student_data[name]['id']}) a fost identificat.")
 
     frame_count += 1
     cv2.imshow('Live - Recunoastere Faciala', frame)
@@ -133,6 +120,7 @@ while True:
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
+# =================== CURĂȚARE ===================
 cap.release()
 cv2.destroyAllWindows()
 cv2.waitKey(1)
