@@ -11,7 +11,7 @@ from datetime import datetime
 # =================== CONFIGURARE ===================
 MOODLE_URL = "http://192.168.1.135/moodle/webservice/rest/server.php"
 MOODLE_TOKEN = "5a987e634310317873b8831b2faeaded"
-COURSE_ID = 789
+COURSE_ID = 2
 STUDENT_DATA_FILE = "studenti.json"
 
 # =================== SUPRIMARE WARNINGS ===================
@@ -35,7 +35,49 @@ with open(STUDENT_DATA_FILE, "r", encoding="utf-8") as f:
     student_data = json.load(f)
 
 # =================== FUNCȚII MOODLE ===================
+def call_moodle_function(function, params):
+    url = f"{MOODLE_URL}?wstoken={MOODLE_TOKEN}&moodlewsrestformat=json&wsfunction={function}"
+    response = requests.post(url, data=params)
+    
+    try:
+        return response.json()
+    except Exception as e:
+        print("[EROARE JSON] Răspuns invalid de la server!")
+        print("[HTTP STATUS]:", response.status_code)
+        print("[RESPONSE TEXT]:", response.text[:500])  # doar primele 500 caractere
+        raise
 
+def get_attendance_id(course_id):
+    contents = call_moodle_function("core_course_get_contents", {"courseid": course_id})
+    for section in contents:
+        for module in section.get("modules", []):
+            if module["modname"] == "attendance":
+                return module["instance"]
+    return None
+
+def get_latest_session_id(attendance_id):
+    sessions = call_moodle_function("mod_attendance_get_sessions", {"attendanceid": attendance_id})
+    now_timestamp = datetime.now().timestamp()
+    for s in sessions.get("sessions", []):
+        if s["sessdate"] <= now_timestamp <= (s["sessdate"] + s["duration"]):
+            return s["id"]
+    return None
+
+def get_present_status_id(attendance_id):
+    statuses = call_moodle_function("mod_attendance_get_user_statuses", {"attendanceid": attendance_id})
+    for status in statuses.get("statuses", []):
+        if status["acronym"].lower() == "p":  # P = Prezent
+            return status["id"]
+    return None
+
+def mark_attendance(user_id, session_id, status_id):
+    params = {
+        "sessionid": session_id,
+        "userids[0]": user_id,
+        "statusid": status_id
+    }
+    response = call_moodle_function("mod_attendance_update_user_status", params)
+    return response
 
 # =================== INIȚIALIZARE RECUNOAȘTERE FACIALĂ ===================
 detector = dlib.get_frontal_face_detector()
@@ -112,7 +154,22 @@ while True:
 
             if name != "Necunoscut" and name not in studenti_marcati:
                 student_id = int(student_data[name]["id"])
-                print(f"[RECUNOSCUT ✅] {name} (ID: {student_data[name]['id']}) a fost identificat.")
+                print(f"[RECUNOSCUT ✅] {name} (ID: {student_id}) a fost identificat.")
+
+                # === MOODLE ===
+                attendance_id = get_attendance_id(COURSE_ID)
+                if attendance_id:
+                    session_id = get_latest_session_id(attendance_id)
+                    status_id = get_present_status_id(attendance_id)
+                    if session_id and status_id:
+                        result = mark_attendance(student_id, session_id, status_id)
+                        print(f"[MOODLE ✅] Prezență marcată pentru {name}.")
+                    else:
+                        print(f"[MOODLE ⚠️] Nu s-a găsit sesiunea activă sau statusul.")
+                else:
+                    print("[MOODLE ❌] Nu s-a găsit activitatea de prezență.")
+                
+                studenti_marcati.add(name)
 
     frame_count += 1
     cv2.imshow('Live - Recunoastere Faciala', frame)
