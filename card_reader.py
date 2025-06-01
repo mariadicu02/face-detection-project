@@ -2,7 +2,7 @@ from py532lib.i2c import *
 from py532lib.frame import *
 from py532lib.constants import *
 
-# Inițializare PN532 pe I2C
+
 nfc = Pn532_i2c()
 nfc.SAMconfigure()
 
