@@ -171,3 +171,51 @@ Diagnosticul a fost posibil prin combinarea:
 După activarea corectă a protocolului REST, configurarea serviciului web și adăugarea funcțiilor necesare,
 comunicarea între sistemul local (Raspberry Pi) și Moodle a funcționat corect.
 
+
+
+raspi@raspberrypi:~/face-detection-project $ python facial_detection.py 
+[INFO] Initializing...
+[INFO] Loading images from 'poze/'...
+[INFO] Loaded daniel_radu.
+[INFO] Loaded rares_oprea.
+[INFO] Loaded cosmin_dumitru.
+[INFO] Loaded maria_stoica.
+[INFO] Loaded ion_ilie.
+[INFO] Loaded roxana_ionescu.
+[INFO] Loaded elena_matei.
+[INFO] Loaded alina_muresan.
+[INFO] Loaded bogdan_toma.
+[INFO] Loaded ioana_ciobanu.
+[INFO] Loaded george_marin.
+[INFO] Loaded vlad_neagu.
+[INFO] Loaded andrei_popa.
+[INFO] Loaded adina_dragomir.
+[INFO] Loaded simona_vlad.
+[ WARN:0@11.632] global ./modules/videoio/src/cap_gstreamer.cpp (2401) handleMessage OpenCV | GStreamer warning: Embedded video playback halted; module source reported: Could not read from resource.
+[ WARN:0@11.633] global ./modules/videoio/src/cap_gstreamer.cpp (1356) open OpenCV | GStreamer warning: unable to start pipeline
+[ WARN:0@11.633] global ./modules/videoio/src/cap_gstreamer.cpp (862) isPipelinePlaying OpenCV | GStreamer warning: GStreamer: pipeline have not been created
+[INFO] Camera started.
+[RECOGNIZED ✅] simona_vlad (ID: 1014)
+[DEBUG] URL: http://192.168.0.101/moodle/webservice/rest/server.php?wstoken=5a987e634310317873b8831b2faeaded&moodlewsrestformat=json&wsfunction=core_course_get_contents
+[DEBUG] Params: {'courseid': 2}
+[DEBUG] Status Code: 200
+[DEBUG] URL: http://192.168.0.101/moodle/webservice/rest/server.php?wstoken=5a987e634310317873b8831b2faeaded&moodlewsrestformat=json&wsfunction=mod_attendance_get_sessions
+[DEBUG] Params: {'attendanceid': 1}
+[DEBUG] Status Code: 200
+[DEBUG] Attendance ID: 1
+[DEBUG] Session ID: 4
+[DEBUG] URL: http://192.168.0.101/moodle/webservice/rest/server.php?wstoken=5a987e634310317873b8831b2faeaded&moodlewsrestformat=json&wsfunction=mod_attendance_get_session
+[DEBUG] Params: {'sessionid': 4}
+[DEBUG] Status Code: 200
+[DEBUG] Status ID: 5
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+[DEBUG] URL: http://192.168.0.101/moodle/webservice/rest/server.php?wstoken=5a987e634310317873b8831b2faeaded&moodlewsrestformat=json&wsfunction=mod_attendance_update_user_status
+[DEBUG] Params: {'sessionid': 4, 'updates[0][studentid]': 1014, 'updates[0][statusid]': 5}
+[DEBUG] Status Code: 200
+[MOODLE ✅] Marked simona_vlad present. Response: {'exception': 'core\\exception\\invalid_parameter_exception', 'errorcode': 'invalidparameter', 'message': 'Invalid parameter value detected (Missing required key in single structure: studentid)', 'debuginfo': 'Missing required key in single structure: studentid'}
+
+
