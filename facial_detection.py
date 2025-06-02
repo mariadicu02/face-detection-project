@@ -1,5 +1,3 @@
-# facial_attendance_moodle.py
-
 import os
 import cv2
 import dlib
@@ -8,6 +6,7 @@ import warnings
 import json
 import requests
 import threading
+import logging
 from glob import glob
 from datetime import datetime
 
@@ -16,13 +15,18 @@ MOODLE_URL = "http://192.168.0.101/moodle/webservice/rest/server.php"
 MOODLE_TOKEN = os.getenv("MOODLE_TOKEN", "5a987e634310317873b8831b2faeaded")
 COURSE_ID = 2
 STUDENT_DATA_FILE = "studenti.json"
+FACE_MATCH_THRESHOLD = 0.6
+LOCAL_BACKUP_FILE = "prezenta_backup.json"
+
+# =================== LOGGING ===================
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 # =================== SUPPRESS WARNINGS ===================
 os.environ["OPENCV_VIDEOIO_DEBUG"] = "0"
 os.environ["GST_DEBUG"] = "0"
 warnings.filterwarnings("ignore")
 
-print("[INFO] Initializing...")
+logging.info("Initializare sistem...")
 
 # =================== VERIFY FILES ===================
 REQUIRED_FILES = [
@@ -33,27 +37,49 @@ REQUIRED_FILES = [
 
 for file in REQUIRED_FILES:
     if not os.path.exists(file):
-        print(f"[ERROR] Required file missing: {file}")
+        logging.error(f"Fișier lipsă: {file}")
         exit()
+
+# =================== NFC FUNCTION ===================
+def read_nfc_uid():
+    try:
+        import board
+        import busio
+        import adafruit_pn532.i2c
+
+        i2c = busio.I2C(board.SCL, board.SDA)
+        pn532 = adafruit_pn532.i2c.PN532_I2C(i2c, debug=False)
+        pn532.SAM_configuration()
+
+        logging.info("Aștept card NFC...")
+        uid = pn532.read_passive_target(timeout=2)
+        if uid:
+            logging.info(f"Card detectat: {uid.hex().upper()}")
+            return uid.hex().upper()
+        else:
+            logging.warning("Card NFC nedetectat.")
+            return None
+    except Exception as e:
+        logging.error(f"Eroare la citire NFC: {e}")
+        return None
 
 # =================== LOAD STUDENT DATA ===================
 with open(STUDENT_DATA_FILE, "r", encoding="utf-8") as f:
     student_data = json.load(f)
 
-# =================== MOODLE API CALL ===================
+# =================== MOODLE API ===================
 def call_moodle_function(function, params):
     url = f"{MOODLE_URL}?wstoken={MOODLE_TOKEN}&moodlewsrestformat=json&wsfunction={function}"
     try:
         response = requests.post(url, data=params, timeout=5)
-        print(f"[DEBUG] URL: {url}")
-        print(f"[DEBUG] Params: {params}")
-        print(f"[DEBUG] Status Code: {response.status_code}")
-        return response.json()
+        data = response.json()
+        if "exception" in data:
+            logging.error(f"Eroare Moodle: {data.get('message')}")
+        return data
     except Exception as e:
-        print("[ERROR] Moodle request failed:", e)
+        logging.error(f"Conexiune Moodle eșuată: {e}")
         return {}
 
-# =================== MOODLE HELPERS ===================
 def get_attendance_id(course_id):
     contents = call_moodle_function("core_course_get_contents", {"courseid": course_id})
     for section in contents:
@@ -64,11 +90,7 @@ def get_attendance_id(course_id):
 
 def get_latest_session_id(attendance_id):
     sessions_response = call_moodle_function("mod_attendance_get_sessions", {"attendanceid": attendance_id})
-
-    if isinstance(sessions_response, list):
-        sessions = sessions_response
-    else:
-        sessions = sessions_response.get("sessions", [])
+    sessions = sessions_response.get("sessions", []) if isinstance(sessions_response, dict) else sessions_response
 
     now = datetime.now().timestamp()
     for session in sessions:
@@ -76,11 +98,9 @@ def get_latest_session_id(attendance_id):
             return session["id"]
     return None
 
-
 def get_present_status_id_from_session(session_id):
     response = call_moodle_function("mod_attendance_get_session", {"sessionid": session_id})
-    statuses = response.get("statuses", [])
-    for status in statuses:
+    for status in response.get("statuses", []):
         if status["acronym"].lower() == "p":
             return status["id"]
     return None
@@ -91,42 +111,47 @@ def mark_attendance(user_id, session_id, status_id):
         'updates[0][studentid]': user_id,
         'updates[0][statusid]': status_id
     }
-
     return call_moodle_function("mod_attendance_update_user_status", params)
 
+def backup_local_attendance(name, student_id):
+    data = {
+        "name": name,
+        "id": student_id,
+        "timestamp": datetime.now().isoformat()
+    }
 
-
-'''def mark_student_attendance(name, student_id):
-    attendance_id = get_attendance_id(COURSE_ID)
-    print("[DEBUG] Attendance ID:", attendance_id)
-    if attendance_id:
-        session_id = get_latest_session_id(attendance_id)
-        print("[DEBUG] Session ID:", session_id)
-        status_id = get_present_status_id(attendance_id)
-        print("[DEBUG] Status ID:", status_id)
-
-        if session_id and status_id:
-            result = mark_attendance(student_id, session_id, status_id)
-            print(f"[MOODLE ✅] Marked {name} present. Response: {result}")
-        else:
-            print(f"[MOODLE ⚠️] Session or status not found.")
+    if os.path.exists(LOCAL_BACKUP_FILE):
+        with open(LOCAL_BACKUP_FILE, "r", encoding="utf-8") as f:
+            backup = json.load(f)
     else:
-        print("[MOODLE ❌] Attendance activity not found.")
-'''
+        backup = {"backup_attendance": []}
+
+    backup["backup_attendance"].append(data)
+
+    with open(LOCAL_BACKUP_FILE, "w", encoding="utf-8") as f:
+        json.dump(backup, f, indent=2, ensure_ascii=False)
+
+    logging.info(f"Prezență salvată local pentru {name}.")
+
 def mark_student_attendance(name, student_id):
     attendance_id = get_attendance_id(COURSE_ID)
     session_id = get_latest_session_id(attendance_id)
-    print("[DEBUG] Attendance ID:", attendance_id)
-    print("[DEBUG] Session ID:", session_id)
-
     status_id = get_present_status_id_from_session(session_id)
-    print("[DEBUG] Status ID:", status_id)
 
-    if status_id:
+    logging.debug(f"Attendance ID: {attendance_id}")
+    logging.debug(f"Session ID: {session_id}")
+    logging.debug(f"Status ID: {status_id}")
+
+    if attendance_id and session_id and status_id:
         result = mark_attendance(student_id, session_id, status_id)
-        print(f"[MOODLE ✅] Marked {name} present. Response: {result}")
+        if "status" in result or result == {}:
+            logging.info(f"[MOODLE ✅] {name} marcat prezent.")
+        else:
+            logging.warning(f"[MOODLE ⚠️] Eroare la marcare. Salvare locală.")
+            backup_local_attendance(name, student_id)
     else:
-        print(f"[MOODLE ⚠️] Status not found.")
+        logging.warning("[MOODLE ❌] Informații lipsă. Salvare locală.")
+        backup_local_attendance(name, student_id)
 
 # =================== LOAD FACE DATA ===================
 detector = dlib.get_frontal_face_detector()
@@ -135,7 +160,7 @@ recognizer = dlib.face_recognition_model_v1("dlib_face_recognition_resnet_model_
 
 faces = []
 label_names = {}
-print("[INFO] Loading images from 'poze/'...")
+logging.info("Încarc imagini din folderul 'poze/'...")
 
 for idx, filename in enumerate(glob("poze/*.*")):
     img = cv2.imread(filename)
@@ -154,23 +179,23 @@ for idx, filename in enumerate(glob("poze/*.*")):
     if name in student_data:
         faces.append(descriptor)
         label_names[idx] = name
-        print(f"[INFO] Loaded {name}.")
+        logging.info(f"Încărcat: {name}")
     else:
-        print(f"[WARNING] {name} not found in {STUDENT_DATA_FILE}.")
+        logging.warning(f"{name} nu există în fișierul {STUDENT_DATA_FILE}.")
 
-# =================== START CAMERA ===================
+# =================== CAMERA LOOP ===================
 cap = cv2.VideoCapture("/dev/video0")
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
 cap.set(cv2.CAP_PROP_FPS, 10)
 
 if not cap.isOpened():
-    print("[ERROR] Cannot access camera.")
+    logging.error("Nu pot accesa camera.")
     exit()
 
 frame_count = 0
 studenti_marcati = set()
 
-print("[INFO] Camera started.")
+logging.info("Camera pornită.")
 
 while True:
     ret, frame = cap.read()
@@ -189,7 +214,7 @@ while True:
             distances = [np.linalg.norm(np.array(descriptor) - np.array(f)) for f in faces]
             min_dist = min(distances) if distances else float("inf")
             idx = distances.index(min_dist) if distances else -1
-            name = label_names.get(idx, "Necunoscut") if min_dist < 0.6 else "Necunoscut"
+            name = label_names.get(idx, "Necunoscut") if min_dist < FACE_MATCH_THRESHOLD else "Necunoscut"
             color = (0, 255, 0) if name != "Necunoscut" else (0, 0, 255)
 
             cv2.rectangle(frame, (face.left(), face.top()), (face.right(), face.bottom()), color, 2)
@@ -197,9 +222,23 @@ while True:
 
             if name != "Necunoscut" and name not in studenti_marcati:
                 student_id = int(student_data[name]["id"])
-                print(f"[RECOGNIZED ✅] {name} (ID: {student_id})")
                 threading.Thread(target=mark_student_attendance, args=(name, student_id)).start()
                 studenti_marcati.add(name)
+
+            if name == "Necunoscut":
+                logging.info("Persoană necunoscută. Se cere card NFC.")
+                uid = read_nfc_uid()
+                if uid:
+                    for key, info in student_data.items():
+                        if info.get("nfc_uid", "").upper() == uid.upper():
+                            if key not in studenti_marcati:
+                                student_id = int(info["id"])
+                                logging.info(f"NFC recunoscut: {key} (ID: {student_id})")
+                                threading.Thread(target=mark_student_attendance, args=(key, student_id)).start()
+                                studenti_marcati.add(key)
+                            break
+                    else:
+                        logging.warning("Card NFC necunoscut.")
 
     frame_count += 1
     cv2.imshow("Live - Facial Recognition", frame)

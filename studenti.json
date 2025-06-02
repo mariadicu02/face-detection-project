@@ -103,5 +103,13 @@
     "prenume": "Vlad",
     "email": "vlad.neagu@student.upt.ro",
     "parola": "VladNeagu@1"
+  },
+  "stefan_simion": {
+    "id": "1016",
+    "nume": "Stefan",
+    "prenume": "Simion",
+    "email": "stefan.simion@student.upt.ro",
+    "parola": "StefanSimion@1",
+    "nfc_uid": "B9D9F539"
   }
 }
