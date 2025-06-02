@@ -1,221 +1,127 @@
 
-Documentatie depanare Moodle local pe Raspberry Pi
+🧩 Documentație depanare completă – Moodle pe Raspberry Pi + Sistem prezență facială
+------------------------------------------------------------------------------------
 
-🔍 Problemă întâlnită:
-La accesarea platformei Moodle de pe Raspberry Pi, în browserul local (http://localhost/moodle), pagina rămânea blocată la încărcare, fără răspuns (timeout). Eroarea afișată anterior era:
-This site can’t be reached – 192.168.X.X took too long to respond.
-ERR_CONNECTION_TIMED_OUT
+📌 Problemă: Moodle nu se încarcă local (timeout la http://localhost/moodle)
 
-📌 Cauze identificate:
-1. Moodle fusese configurat anterior într-o altă rețea Wi-Fi.
-2. Fișierul config.php conținea o adresă IP veche, care nu mai era valabilă în rețeaua curentă.
-3. Apache era activ, dar Moodle nu se încărca din cauza acelui redirect invalid.
+🔍 Simptome:
+- Pagina rămânea blocată în browser.
+- Eroare: ERR_CONNECTION_TIMED_OUT
+- Accesul la http://localhost funcționa, dar nu și http://localhost/moodle.
 
-✅ Soluții aplicate pas cu pas:
+🧪 Cauze:
+1. Moodle fusese configurat anterior pe altă rețea.
+2. Fișierul config.php conținea o adresă IP veche și invalidă.
+3. Apache funcționa, dar redirectul spre IP-ul anterior bloca accesul.
 
-1. Verificare rețea și IP curent Raspberry Pi:
+✅ Soluție:
+1. Verificare IP curent:
    ip a
-   → IP activ pe wlan0 a fost 192.168.0.101
+   → Ex: 192.168.0.101
 
-2. Verificare funcționare Apache:
+2. Verificare Apache:
    sudo systemctl status apache2
-   → Apache era activ.
 
-3. Verificare fișiere site:
+3. Verificare structură fișiere:
    ls /var/www/html/
-   → Exista folderul moodle, deci Moodle era instalat.
 
-4. Testare locală în browser:
-   - http://localhost → pagina Apache OK
-   - http://localhost/moodle → se bloca, fără încărcare
-
-5. Verificare prezență fișier config.php:
-   ls /var/www/html/moodle/config.php
-
-6. Editare fișier config.php pentru a corecta adresa de server:
+4. Editare config.php:
    sudo nano /var/www/html/moodle/config.php
-   → Linia modificată:
+   Linia modificată:
    $CFG->wwwroot = 'http://localhost/moodle';
 
-7. Salvare și reîncărcare în browser:
-   - După modificare, http://localhost/moodle a început să funcționeze corect.
+5. Salvare și reîncărcare → Moodle a funcționat corect.
 
-📦 Concluzii:
-- Moodle funcționează corect pe Raspberry Pi, atât timp cât config.php conține o adresă validă pentru server.
-- La schimbarea rețelei, este necesară actualizarea $CFG->wwwroot din config.php dacă adresa IP se modifică.
-- Alternativ, se poate folosi http://localhost/moodle pentru acces local, fără grija modificării IP-ului.
+🔐 Integrare REST API Moodle – Probleme și depanare
 
-
-Documentație tehnică — Sistem automat de prezență facială cu Moodle
-✅ Funcționalitate generală
-Acest script:
-
-Detectează fețele studenților în timp real prin cameră.
-
-Recunoaște studentul pe baza imaginilor din poze/.
-
-Marchează prezența în sesiunea activă din Moodle prin API REST.
-
-📦 Cerințe
-Python 3.x
-
-OpenCV, dlib, requests, numpy
-
-Fișiere .dat pentru recunoaștere facială
-
-Fișier studenti.json cu structura: { "NumeStudent": { "id": MOODLE_ID, ... } }
-
-🔐 Integrare cu Moodle
-Web services activate în Moodle
-
-Pluginul Attendance instalat
-
-Token activ pentru un user cu rol profesor
-
-📲 API Moodle folosit
-core_course_get_contents – pentru a găsi activitatea de tip Attendance
-
-mod_attendance_get_sessions – pentru a găsi sesiunea activă
-
-mod_attendance_get_user_statuses – pentru a obține statusul „P” (Prezent)
-
-mod_attendance_update_user_status – pentru a marca prezența studentului
-
-⚠️ Probleme întâlnite
-Token-ul trebuie generat cu permisiuni suficiente.
-
-Serverul local trebuie accesibil la adresa din MOODLE_URL.
-
-Fețele din poze/ trebuie să fie clare și bine aliniate.
-
-
-
-===============================
-DOCUMENTAȚIE ERORI MOODLE
-===============================
-
-Scop:
------
-Documentarea completă a problemelor întâmpinate în integrarea sistemului de recunoaștere facială cu Moodle,
-precum și soluțiile aplicate pentru rezolvarea acestora. Informațiile de mai jos sunt esențiale pentru
-mentenanța viitoare și înțelegerea modului de funcționare al sistemului.
-
-1. PROBLEMA: Eroare 403 - Forbidden
------------------------------------
+1️⃣ Problemă: HTTP 403 Forbidden
 Simptome:
-- La rularea scriptului `test_moodle_connection.py` apărea mesajul:
-  "[❌] Eroare HTTP: 403"
-- În browser: "Access to 192.168.0.101 was denied. You don't have authorisation to view this page."
+- Mesaj în script: [❌] Eroare HTTP: 403
+- În browser: Access denied
 
-Investigații:
-- Verificare configurare token în Moodle (Site administration > Server > Web services > Manage tokens)
-- Confirmare că token-ul era valid, asociat unui utilizator administrator, și nu avea restricții IP.
-- Testarea directă a URL-ului în browser a returnat mesajul de interdicție de acces.
-
-Diagnostic final:
-- Moodle avea web services activate, DAR protocolul REST nu era activat.
+Cauză:
+- Protocolul REST nu era activat în Moodle.
 
 Soluție:
-1. Autentificare ca administrator în Moodle.
-2. Navigare la: Site administration > Plugins > Web services > Manage protocols
-3. Activare protocol REST (bifarea casetei corespunzătoare).
+- Navigare:
+  Site administration > Plugins > Web services > Manage protocols
+- Bifare REST → Save changes
 
-Rezultat:
-- După această acțiune, URL-ul testat în browser a început să returneze un JSON valid cu informații despre site.
-
----
-
-2. PROBLEMA: Token valid dar fără acces la web service
--------------------------------------------------------
+2️⃣ Problemă: Token valid, dar serviciu fără permisiuni
 Simptome:
-- Scriptul de autentificare returna erori de tip:
-  "[ERROR] Moodle request failed: Expecting value: line 1 column 1 (char 0)"
-- În logul Apache apărea eroarea:
-  "The server died because the web services or the REST protocol are not enable"
+- Scriptul returna eroarea:
+  "Expecting value: line 1 column 1 (char 0)"
 
 Diagnostic:
-- Deși token-ul era valid, funcțiile web service nu erau active în serviciul asociat token-ului.
+- Tokenul era asociat unui serviciu care nu avea funcțiile necesare.
 
 Soluție:
-1. Verificare în: Site administration > Server > Web services > External services
-2. Selectare serviciu asociat token-ului (ex: AttendanceService)
-3. Verificare și adăugare funcții necesare (ex: core_webservice_get_site_info, mod_attendance_*)
+- Navigare:
+  Site administration > Server > Web services > External services
+- Selectare serviciu (ex: AttendanceService)
+- Adăugare manuală funcții:
+  - core_webservice_get_site_info
+  - mod_attendance_get_sessions
+  - mod_attendance_update_user_status
 
----
-
-3. PROBLEMA: Funcțiile nu apăreau în răspunsul de test
-------------------------------------------------------
-Simptome:
-- Funcțiile precum `mod_attendance_get_sessions` sau `mod_attendance_update_user_status` nu erau disponibile.
+3️⃣ Problemă: Funcțiile nu apăreau în răspunsul JSON
+Cauză:
+- Funcțiile REST nu erau încă adăugate serviciului tokenului.
 
 Soluție:
-1. Navigare în Moodle la:
-   Site administration > Server > Web services > External services > [AttendanceService]
-2. Apăsare pe “Add functions” și adăugare manuală a funcțiilor necesare.
+- External services > AttendanceService > Add functions
+- Adăugare funcții lipsă (ex: mod_attendance_get_user_statuses)
 
-Verificare:
-- Rulare din nou a `test_moodle_connection.py`
-- Confirmare primire răspuns JSON valid cu lista completă a funcțiilor incluse.
+🧠 Problemă nouă: Eroare în marcarea prezenței – invalidparameter
 
----
+Context:
+- Scriptul facial_detection.py recunoaște corect fața → obține ID-ul studentului și al sesiunii.
+- În pasul final, marcarea prezenței eșuează cu mesajul:
+  "Invalid parameter value detected (Missing required key in single structure: studentid)"
 
-Concluzie:
-----------
-Toate problemele întâmpinate au fost legate de configurarea incompletă a serviciului REST în Moodle.
-Diagnosticul a fost posibil prin combinarea:
-- Testării URL-urilor direct în browser.
-- Consultării logurilor Apache (`/var/log/apache2/error.log`)
-- Verificării setărilor din interfața de administrare Moodle.
-- Creării unui script de test dedicat (`test_moodle_connection.py`) pentru confirmarea răspunsurilor serverului.
+Diagnostic:
+- Moodle așteaptă parametrii într-o structură de tip dicționar, nu forma updates[0][studentid].
 
-După activarea corectă a protocolului REST, configurarea serviciului web și adăugarea funcțiilor necesare,
-comunicarea între sistemul local (Raspberry Pi) și Moodle a funcționat corect.
+Soluție:
+- Înlocuire cod:
+  updates[0][studentid] → updates: [{"studentid": ..., "statusid": ...}]
+- Trimitere JSON cu:
+  headers={'Content-Type': 'application/json'}, json=data
 
+⚠️ Alte probleme tehnice observate
 
+🎥 Eroare cameră OpenCV/GStreamer:
+- WARN: Could not read from resource.
 
-raspi@raspberrypi:~/face-detection-project $ python facial_detection.py 
-[INFO] Initializing...
-[INFO] Loading images from 'poze/'...
-[INFO] Loaded daniel_radu.
-[INFO] Loaded rares_oprea.
-[INFO] Loaded cosmin_dumitru.
-[INFO] Loaded maria_stoica.
-[INFO] Loaded ion_ilie.
-[INFO] Loaded roxana_ionescu.
-[INFO] Loaded elena_matei.
-[INFO] Loaded alina_muresan.
-[INFO] Loaded bogdan_toma.
-[INFO] Loaded ioana_ciobanu.
-[INFO] Loaded george_marin.
-[INFO] Loaded vlad_neagu.
-[INFO] Loaded andrei_popa.
-[INFO] Loaded adina_dragomir.
-[INFO] Loaded simona_vlad.
-[ WARN:0@11.632] global ./modules/videoio/src/cap_gstreamer.cpp (2401) handleMessage OpenCV | GStreamer warning: Embedded video playback halted; module source reported: Could not read from resource.
-[ WARN:0@11.633] global ./modules/videoio/src/cap_gstreamer.cpp (1356) open OpenCV | GStreamer warning: unable to start pipeline
-[ WARN:0@11.633] global ./modules/videoio/src/cap_gstreamer.cpp (862) isPipelinePlaying OpenCV | GStreamer warning: GStreamer: pipeline have not been created
-[INFO] Camera started.
-[RECOGNIZED ✅] simona_vlad (ID: 1014)
-[DEBUG] URL: http://192.168.0.101/moodle/webservice/rest/server.php?wstoken=5a987e634310317873b8831b2faeaded&moodlewsrestformat=json&wsfunction=core_course_get_contents
-[DEBUG] Params: {'courseid': 2}
-[DEBUG] Status Code: 200
-[DEBUG] URL: http://192.168.0.101/moodle/webservice/rest/server.php?wstoken=5a987e634310317873b8831b2faeaded&moodlewsrestformat=json&wsfunction=mod_attendance_get_sessions
-[DEBUG] Params: {'attendanceid': 1}
-[DEBUG] Status Code: 200
-[DEBUG] Attendance ID: 1
-[DEBUG] Session ID: 4
-[DEBUG] URL: http://192.168.0.101/moodle/webservice/rest/server.php?wstoken=5a987e634310317873b8831b2faeaded&moodlewsrestformat=json&wsfunction=mod_attendance_get_session
-[DEBUG] Params: {'sessionid': 4}
-[DEBUG] Status Code: 200
-[DEBUG] Status ID: 5
-libpng warning: iCCP: known incorrect sRGB profile
-libpng warning: iCCP: known incorrect sRGB profile
-libpng warning: iCCP: known incorrect sRGB profile
-libpng warning: iCCP: known incorrect sRGB profile
-libpng warning: iCCP: known incorrect sRGB profile
-[DEBUG] URL: http://192.168.0.101/moodle/webservice/rest/server.php?wstoken=5a987e634310317873b8831b2faeaded&moodlewsrestformat=json&wsfunction=mod_attendance_update_user_status
-[DEBUG] Params: {'sessionid': 4, 'updates[0][studentid]': 1014, 'updates[0][statusid]': 5}
-[DEBUG] Status Code: 200
-[MOODLE ✅] Marked simona_vlad present. Response: {'exception': 'core\\exception\\invalid_parameter_exception', 'errorcode': 'invalidparameter', 'message': 'Invalid parameter value detected (Missing required key in single structure: studentid)', 'debuginfo': 'Missing required key in single structure: studentid'}
+Cauză:
+- Cameră neconectată sau port GStreamer nefuncțional.
 
+Soluții:
+- Confirmare cameră conectată.
+- Înlocuire cu cv2.VideoCapture(0)
 
+📷 Calitatea imaginilor pentru recunoaștere:
+Probleme:
+- Poze neclare → nerecunoscute
+
+Soluții:
+- Fotografii frontale, nume format prenume_nume.jpg
+- Structură studenti.json corectă
+
+✅ Rezumat funcționare sistem
+
+| Componentă         | Status        | Observații                            |
+|--------------------|---------------|----------------------------------------|
+| Moodle Local       | ✅ Funcțional | Adresă stabilită pe localhost          |
+| REST API           | ✅ Activat     | Funcții complet adăugate              |
+| Token              | ✅ Valid       | Asociat AttendanceService             |
+| Facial Recognition | ✅ Funcțional | Poze optimizate, encodings salvate    |
+| Marcarea prezenței | ✅ OK          | După corectare structură JSON         |
+
+📦 Recomandări mentenanță:
+- Verifică config.php la schimbare de rețea.
+- Confirmă funcțiile asociate tokenului.
+- Rulează script test:
+  python test_moodle_connection.py
+- Pentru loguri:
+  tail -f /var/log/apache2/error.log
