@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <title>Monitorizare Prezență</title>
+    <script>
+        async function loadStudents() {
+            const response = await fetch('/api/students');
+            const students = await response.json();
+            const list = document.getElementById('student-list');
+
+            list.innerHTML = students.map(student => `
+                <li>${student.nume} ${student.prenume} - ${student.email}</li>
+            `).join('');
+        }
+
+        window.onload = loadStudents;
+    </script>
+</head>
+<body>
+    <h1>Monitorizare Live a Prezențelor</h1>
+    <ul id="student-list"></ul>
+</body>
+</html>

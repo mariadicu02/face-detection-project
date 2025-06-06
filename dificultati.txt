@@ -125,3 +125,331 @@ Soluții:
   python test_moodle_connection.py
 - Pentru loguri:
   tail -f /var/log/apache2/error.log
+
+
+
+
+# ============================
+# PASUL 1: Instalare dependente
+# ============================
+# 1. Asigură-te că ai următoarele biblioteci instalate:
+# pip install opencv-python dlib numpy requests adafruit-circuitpython-pn532
+# pip install sqlite3 (doar pentru unele versiuni de Python, altfel e inclus)
+
+# ============================
+# PASUL 2: Crearea bazei de date SQLite
+# ============================
+# Acest script se rulează o singură dată pentru a crea tabelele.
+import sqlite3
+
+conn = sqlite3.connect("studenti.db")
+c = conn.cursor()
+
+c.execute("""
+CREATE TABLE IF NOT EXISTS studenti (
+    id INTEGER PRIMARY KEY,
+    nume TEXT NOT NULL,
+    nfc_uid TEXT
+)
+""")
+
+c.execute("""
+CREATE TABLE IF NOT EXISTS prezente (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER,
+    data TEXT,
+    ora TEXT,
+    FOREIGN KEY(student_id) REFERENCES studenti(id)
+)
+""")
+
+conn.commit()
+conn.close()
+
+# ============================
+# PASUL 3: Populare baza de date din Moodle
+# ============================
+# Se adaugă un script care preia studenții înrolați în curs din Moodle și îi inserează în SQLite
+
+import os
+import requests
+import json
+import logging
+from datetime import datetime
+import sqlite3
+
+MOODLE_URL = "http://192.168.0.101/moodle/webservice/rest/server.php"
+MOODLE_TOKEN = os.getenv("MOODLE_TOKEN", "5a987e634310317873b8831b2faeaded")
+COURSE_ID = 2
+
+def call_moodle_function(function, params):
+    url = f"{MOODLE_URL}?wstoken={MOODLE_TOKEN}&moodlewsrestformat=json&wsfunction={function}"
+    try:
+        response = requests.post(url, data=params, timeout=5)
+        data = response.json()
+        return data
+    except Exception as e:
+        logging.error(f"Eroare Moodle: {e}")
+        return {}
+
+def import_students_from_moodle():
+    response = call_moodle_function("core_enrol_get_enrolled_users", {"courseid": COURSE_ID})
+
+    conn = sqlite3.connect("studenti.db")
+    c = conn.cursor()
+
+    for user in response:
+        student_id = user["id"]
+        nume = user.get("fullname") or f"User{student_id}"
+        nfc_uid = ""  # opțional
+        
+        c.execute("INSERT OR IGNORE INTO studenti (id, nume, nfc_uid) VALUES (?, ?, ?)", (student_id, nume, nfc_uid))
+
+    conn.commit()
+    conn.close()
+    logging.info("Studenți importați cu succes din Moodle.")
+
+import_students_from_moodle()
+
+# ============================
+# PASUL 4: Modificare script principal - inregistrare in SQLite
+# ============================
+# Adaugă această funcție în scriptul principal pentru salvarea prezenței:
+
+def mark_attendance_sqlite(student_id):
+    conn = sqlite3.connect("studenti.db")
+    c = conn.cursor()
+
+    now = datetime.now()
+    data = now.strftime("%Y-%m-%d")
+    ora = now.strftime("%H:%M:%S")
+
+    c.execute("INSERT INTO prezente (student_id, data, ora) VALUES (?, ?, ?)", (student_id, data, ora))
+    conn.commit()
+    conn.close()
+    logging.info(f"[LOCAL ✅] Prezență înregistrată pentru studentul ID {student_id}.")
+
+# Apoi, în loc de:
+# threading.Thread(target=mark_student_attendance, args=(name, student_id)).start()
+# folosește:
+# threading.Thread(target=mark_attendance_sqlite, args=(student_id,)).start()
+
+# ============================
+# PASUL 5: Vizualizare live cu DB Browser for SQLite
+# ============================
+# 1. Descarcă aplicația: https://sqlitebrowser.org/
+# 2. Deschide fișierul `studenti.db`
+# 3. Mergi la tab-ul "Browse Data"
+# 4. Selectează tabelul `prezente` pentru a vedea prezențele
+
+# ============================
+# PASUL 6: Ce să incluzi în documentație (lucrarea de licență)
+# ============================
+# - Justificare folosire SQLite: embedded, rapid, fără server separat
+# - Structura bazei de date: descrierea tabelelor `studenti` și `prezente`
+# - Exemplu de interogare: SELECT s.nume, p.data, p.ora FROM prezente p JOIN studenti s ON p.student_id = s.id;
+# - Capturi de ecran cu DB Browser for SQLite arătând prezențele
+# - Explicarea procesului: recunoaștere facială -> salvare automata în SQLite
+
+# ============================
+# Final
+# ============================
+# Acum poți rula aplicația ta principală și toate prezențele vor fi salvate local în SQLite și pot fi vizualizate cu DB Browser.
+# Bonus: poți exporta baza de date ca CSV din DB Browser pentru profesori.
+
+
+
+
+Deci am acest script si vreau sa schimb putin functionalitatea. initial am incercat sa ma folosesc de moodle pentru a pune prezntele studentilor detectati si recunoscuti de camera, dar pentru ca nu am reusit sa pun prezenta din cauza ca moodle nu are functie de set ci doar functii de get, am zis sa fac altfel. sa fac scriptul in asa fel inca sa extraga de pe moodle datele despre studentii inrolati (inclusiv poza lor de probil) si ziua, ora si data sesiunii active de prezenta, iar cand un student e detectat si recunoscut, sa se inregistreze intr o baza de date locala numele prenumele id ul studentului. in cazul in care studenul nu are poza cu el pe moodle, sa i se ofere oportunitatea de a scana cardul de student, si sa i se marcheze prezenta pe baza id ului. mie proful care ma ajuta la liceenta mi a zis ca pot folosi sqlite ca nu e asa complicat. ma poti ajuta cu modificarea codului, sa imi explici si ce faci si sa imi zici ce mai am de facut? as vrea ca in final, atunci cand voi prezenta lucrarea de liceenta sa pot arata live cum e inregistrata prezenta si in baza de date, deci banuiesc ca voi avea nevoie de un site web sau de o aplictaie instlalata pentru a putea urmari asta. in plus, tine cont ca eu acum sunt conectatta pe raspberry pi
+
+Edit
+Te ajut să modifici scriptul pentru noua funcționalitate! Îți voi explica pas cu pas ce modificări trebuie făcute și ce componente noi trebuie adăugate.
+
+Analiza situației actuale și planul de modificare
+Scriptul actual încearcă să marcheze prezența direct în Moodle, dar pentru noua funcționalitate vom:
+
+Extrage date din Moodle (studenți înrolați + poze de profil)
+Crea o bază de date SQLite locală pentru prezențe
+Adăuga interfață web pentru monitorizare live
+Modifica logica de recunoaștere să folosească datele din Moodle
+Să începem cu modificările:
+
+
+Script Principal Modificat - Prezența cu Moodle și SQLite
+Code 
+Acum îți voi crea și interfața web pentru monitorizarea live a prezențelor:
+
+
+Interfață Web pentru Monitorizarea Prezențelor
+Code 
+Acum îți creez template-ul HTML pentru interfața web:
+
+
+Template HTML pentru Interfața Web
+Interactive artifact 
+
+
+
+Continue
+
+Edit
+
+Template HTML pentru Interfața Web
+Interactive artifact ∙ Version 2 
+Acum îți creez și un script pentru configurarea inițială și managementul sistemului:
+
+
+Script de Configurare și Management
+Code 
+Explicarea modificărilor și pașii următori
+Ce am modificat în scriptul principal:
+Structura bazei de date SQLite:
+Tabel studenti - informații despre studenți din Moodle
+Tabel sesiuni - sesiunile de prezență din Moodle
+Tabel prezente - prezențele înregistrate local
+Sincronizare cu Moodle:
+Extrage studenții înrolați și pozele lor de profil
+Descarcă pozele în directorul poze_moodle/
+Sincronizează sesiunile de prezență active
+Recunoașterea facială:
+Folosește pozele descărcate din Moodle
+Marchează prezența în baza de date locală
+Interfața web:
+Server Flask pentru monitorizare live
+API endpoints pentru date din baza de date
+Actualizare automată la fiecare 5 secunde
+Ce trebuie să faci acum:
+1. Instalează dependențele:
+bash
+pip install flask opencv-python dlib numpy requests sqlite3
+2. Configurează Moodle:
+Modifică MOODLE_URL cu URL-ul Moodle-ului tău
+Setează token-ul Moodle: export MOODLE_TOKEN="token_tau_aici"
+Verifică COURSE_ID pentru cursul dorit
+3. Creează structura de fișiere:
+proiect/
+├── attendance_system.py          # Scriptul principal
+├── web_interface.py             # Serverul web
+├── setup_manager.py             # Scriptul de configurare
+├── templates/
+│   └── index.html              # Template-ul web
+├── poze_moodle/                # Pozele descărcate din Moodle
+├── prezenta.db                 # Baza de date SQLite
+└── requirements.txt
+4. Rulează configurarea:
+bash
+python setup_manager.py
+5. Pornește sistemul:
+bash
+# Terminal 1 - Scriptul principal
+python attendance_system.py
+
+# Terminal 2 - Interfața web
+python web_interface.py
+6. Accesează interfața web:
+Local: http://localhost:5000
+De pe alt device: http://IP_RASPBERRY:5000
+Pentru prezentarea de licență:
+Demonstrația live:
+Arată cum se detectează studenții cu camera
+Prezintă interfața web cu actualizarea în timp real
+Demonstrează funcționalitatea NFC pentru studenții fără poze
+Monitorizarea bazei de date:
+Interfața web afișează statistici live
+Poți vedea în timp real cine a fost marcat prezent
+Diferențierea între detectarea prin cameră și NFC
+Funcții suplimentare:
+Exportul datelor din baza de date
+Rapoarte de prezență
+Integrarea cu sistemul de note
+Întrebări pentru tine:
+Ai acces la API-ul Moodle și știi cum să obții token-ul?
+Camera și modulul NFC funcționează pe Raspberry Pi?
+Vrei să adaug și funcționalități de export/raportare?
+Îmi spui ce probleme întâmpini și te ajut să le rezolvăm!
+
+
+
+
+
+. Configurarea inițială
+Ai instalat dependențele necesare pentru Flask, OpenCV, dlib, SQLite, etc.:
+
+bash
+pip install flask opencv-python dlib numpy requests sqlite3
+Ai creat fișierele necesare pentru proiect, inclusiv:
+
+proiect/
+├── attendance_system.py     # Scriptul principal
+├── web_interface.py        # Serverul web
+├── setup_manager.py        # Scriptul de configurare
+├── templates/
+│   └── index.html         # Template-ul web
+├── poze_moodle/           # Pozele descărcate din Moodle
+├── prezenta.db            # Baza de date SQLite
+└── requirements.txt
+Ai configurat Moodle pentru sincronizare și preluare automată a studenților și a sesiunilor.
+
+2. Pornirea serverului Flask
+Ai rulat serverul Flask cu:
+
+bash
+python web_interface.py
+Ai verificat mesajele din terminal pentru a confirma că aplicația rulează corect:
+
+Running on all addresses (0.0.0.0)
+Running on http://127.0.0.1:5000
+Running on http://192.168.0.101:5000
+3. Depanarea problemei "This site can't be reached"
+Ai verificat URL-ul corect:
+
+Dacă accesai de pe același dispozitiv, foloseai http://127.0.0.1:5000
+
+Dacă accesai de pe alt dispozitiv, foloseai http://192.168.0.101:5000
+
+Ai verificat firewall-ul pe Raspberry Pi:
+
+bash
+sudo ufw allow 5000
+Ai testat conexiunea dintre dispozitive prin ping 192.168.0.101
+
+Ai verificat dacă există un alt serviciu care ocupă portul 5000:
+
+bash
+sudo netstat -tulnp | grep 5000
+Ai verificat conținutul paginii index.html, care era gol inițial.
+
+4. Adăugarea conținutului în index.html
+Ai adăugat un script JavaScript care încarcă lista de studenți de la API:
+
+html
+<script>
+    async function loadStudents() {
+        const response = await fetch('/api/students');
+        const students = await response.json();
+        const list = document.getElementById('student-list');
+
+        list.innerHTML = students.map(student => `
+            <li>${student.nume} ${student.prenume} - ${student.email}</li>
+        `).join('');
+    }
+
+    window.onload = loadStudents;
+</script>
+Ai confirmat că datele sunt preluate corect, accesând direct API-ul:
+
+http://192.168.0.101:5000/api/students
+5. Verificarea bazei de date SQLite
+Ai testat manual dacă baza de date conține studenți:
+
+python
+import sqlite3
+conn = sqlite3.connect("prezenta.db")
+cursor = conn.cursor()
+cursor.execute("SELECT * FROM studenti")
+print(cursor.fetchall())
+conn.close()
+Dacă baza de date era goală, trebuia reimportată lista de studenți.
+
+Acum ai un sistem funcțional! 📌 Dacă vrei să documentezi procesul, poți folosi această recapitulare într-un README sau într-un ghid de instalare. Ai nevoie de ajutor cu altceva?
+
