@@ -12,6 +12,17 @@ from glob import glob
 from datetime import datetime
 import urllib.request
 from pathlib import Path
+from RPLCD.i2c import CharLCD
+from time import sleep
+
+# =================== LCD Setup ===================
+lcd = CharLCD(i2c_expander='PCF8574', address=0x27, port=1, cols=16, rows=2, charmap='A00', auto_linebreaks=True)
+
+def afiseaza_mesaj(text, durata=3):
+    lcd.clear()
+    lcd.write_string(text)
+    sleep(durata)
+    lcd.clear()
 
 # =================== CONFIG ===================
 MOODLE_URL = "http://192.168.0.101/moodle/webservice/rest/server.php"
@@ -549,10 +560,12 @@ def main():
                                     threading.Thread(target=mark_attendance_local, 
                                                    args=(student_id, "camera")).start()
                                     studenti_marcati.add(student_id)
+                                    afiseaza_mesaj("Succes!")
                                     
                                 color = (0, 255, 0)  # Verde pentru recunoscut
                                 label = f"{student_info[1]} {student_info[0]}" if student_info else f"ID: {student_id}"
                             else:
+                                afiseaza_mesaj("Scanati cardul!")
                                 color = (0, 0, 255)  # Roșu pentru necunoscut
                                 label = "Necunoscut"
                                 
@@ -567,7 +580,9 @@ def main():
                                         studenti_marcati.add(student[0])
                                         label = f"{student[2]} {student[1]} (NFC)"
                                         color = (255, 255, 0)  # Galben pentru NFC
+                                        afiseaza_mesaj("Succes!")
                         else:
+                            afiseaza_mesaj("Eroare!")
                             color = (0, 0, 255)
                             label = "Necunoscut"
 
