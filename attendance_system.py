@@ -415,6 +415,7 @@ def main():
         return
     
     logging.info(f"Sesiune activă: {active_session[2]} ({active_session[3]} - {active_session[4]})")
+    afiseaza_mesaj("Sesiune activa!")
     
     # Încărcare date pentru recunoașterea facială
     try:
@@ -501,8 +502,11 @@ def main():
                                         threading.Thread(target=mark_attendance_local, 
                                                        args=(student[0], "nfc")).start()
                                         studenti_marcati.add(student[0])
-                                        label = f"{student[2]} {student[1]} (NFC)"
+                                        nume_complet = f"{student[2]} {student[1]}"
+                                        label = f"{nume_complet} (NFC)"
                                         color = (255, 255, 0)  # Galben pentru NFC
+                                        afiseaza_mesaj(nume_complet)
+
                         else:
                             color = (0, 0, 255)
                             label = "Necunoscut"
@@ -560,7 +564,7 @@ def main():
                                     threading.Thread(target=mark_attendance_local, 
                                                    args=(student_id, "camera")).start()
                                     studenti_marcati.add(student_id)
-                                    afiseaza_mesaj("Succes!")
+                                    afiseaza_mesaj(name)
                                     
                                 color = (0, 255, 0)  # Verde pentru recunoscut
                                 label = f"{student_info[1]} {student_info[0]}" if student_info else f"ID: {student_id}"
@@ -580,9 +584,9 @@ def main():
                                         studenti_marcati.add(student[0])
                                         label = f"{student[2]} {student[1]} (NFC)"
                                         color = (255, 255, 0)  # Galben pentru NFC
-                                        afiseaza_mesaj("Succes!")
+                                        afiseaza_mesaj(name)
                         else:
-                            afiseaza_mesaj("Eroare!")
+                            afiseaza_mesaj("Student neidentificat!")
                             color = (0, 0, 255)
                             label = "Necunoscut"
 
