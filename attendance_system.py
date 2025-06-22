@@ -16,46 +16,60 @@ from RPLCD.i2c import CharLCD
 from time import sleep
 from dotenv import load_dotenv
 
+#  Incarcare variabile din .env 
+load_dotenv()
 
-# =================== LCD Setup ===================
-lcd = CharLCD(i2c_expander='PCF8574', address=0x27, port=1, cols=16, rows=2, charmap='A00', auto_linebreaks=True)
+# Configurare LCD
+lcd = CharLCD(
+    i2c_expander='PCF8574', 
+    address=0x27, 
+    port=1, 
+    cols=16, 
+    rows=2, 
+    charmap='A00', 
+    auto_linebreaks=True)
 
 def afiseaza_mesaj(text, durata=3):
+    """Afiseaza un mesaj pe LCD pentru `durata` secunde"""
     lcd.clear()
     lcd.write_string(text)
     sleep(durata)
     lcd.clear()
-    
-    
-load_dotenv()
 
-# =================== CONFIG ===================
+def log_si_lcd(text, durata=2):
+    """Trimite acelasi mesaj în log si pe LCD"""
+    logging.info(text)
+    afiseaza_mesaj(text, durata)
+    
+
+
+# Configurare sistem
 MOODLE_URL = os.getenv("MOODLE_URL")
 MOODLE_TOKEN = os.getenv("MOODLE_TOKEN")
 COURSE_ID = int(os.getenv("COURSE_ID", 2))
 FACE_MATCH_THRESHOLD = float(os.getenv("FACE_MATCH_THRESHOLD", 0.6))
 PHOTOS_DIR = os.getenv("PHOTOS_DIR", "poze_moodle")
-
-
-
 LOCAL_DB_FILE = "prezenta.db"
-# =================== LOGGING ===================
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
-# =================== SUPPRESS WARNINGS ===================
+# Logging
+logging.basicConfig(
+    level=logging.INFO, 
+    format="%(asctime)s [%(levelname)s] %(message)s")
+
+# Blocare warninguri 
 os.environ["OPENCV_VIDEOIO_DEBUG"] = "0"
 os.environ["GST_DEBUG"] = "0"
 warnings.filterwarnings("ignore")
 
-logging.info("Initializare sistem prezență...")
+logging.info("Initializare sistem prezenta")
 
-# =================== DATABASE SETUP ===================
-def init_database():
-    """Inițializează baza de date SQLite cu tabelele necesare"""
+# Configurare baza de date
+def init_database()-> None:
+    """Creez tabelele daca nu exista deja"""
     conn = sqlite3.connect(LOCAL_DB_FILE)
     c = conn.cursor()
     
-    # Tabel pentru studenți (sincronizat din Moodle)
+    # Tabel studenti (sincronizat din Moodle)
     c.execute('''CREATE TABLE IF NOT EXISTS studenti (
         id INTEGER PRIMARY KEY,
         nume TEXT NOT NULL,
@@ -66,7 +80,7 @@ def init_database():
         last_sync TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
     
-    # Tabel pentru sesiuni de prezență
+    # Tabel sesiuni de prezenta
     c.execute('''CREATE TABLE IF NOT EXISTS sesiuni (
         id INTEGER PRIMARY KEY,
         moodle_session_id INTEGER,
@@ -77,7 +91,7 @@ def init_database():
         activa INTEGER DEFAULT 0
     )''')
     
-    # Tabel pentru prezențe
+    # Tabel prezente
     c.execute('''CREATE TABLE IF NOT EXISTS prezente (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         student_id INTEGER,
@@ -90,11 +104,11 @@ def init_database():
     
     conn.commit()
     conn.close()
-    logging.info("Baza de date inițializată cu succes.")
+    logging.info("Baza de date initializata cu succes")
 
-# =================== MOODLE API FUNCTIONS ===================
+# Functii API Moodle
 def call_moodle_function(function, params):
-    """Apelează o funcție din API-ul Moodle"""
+    """Intoarce raspunsul JSON pentru functia moodle specificata"""
     url = f"{MOODLE_URL}?wstoken={MOODLE_TOKEN}&moodlewsrestformat=json&wsfunction={function}"
     try:
         response = requests.post(url, data=params, timeout=10)
@@ -103,22 +117,22 @@ def call_moodle_function(function, params):
             logging.error(f"Eroare Moodle: {data.get('message')}")
         return data
     except Exception as e:
-        logging.error(f"Conexiune Moodle eșuată: {e}")
+        logging.error(f"Conexiune Moodle esuata: {e}")
         return {}
 
 def get_enrolled_students(course_id):
     """Extrage lista studenților înrolați în curs"""
-    logging.info("Extrag studenții înrolați din Moodle...")
+    logging.info("Extrag studentii inrolati din Moodle...")
     params = {'courseid': course_id}
     students = call_moodle_function("core_enrol_get_enrolled_users", params)
     
     if not isinstance(students, list):
-        logging.error("Nu s-au putut extrage studenții din Moodle")
+        logging.error("Nu s-au putut extrage studentii din Moodle")
         return []
     
     student_list = []
     for student in students:
-        # Filtrăm doar studenții (nu profesorii)
+        # Filtrez doar studentii (nu profesorii)
         if any(role['shortname'] == 'student' for role in student.get('roles', [])):
             student_info = {
                 'id': student['id'],
@@ -129,32 +143,32 @@ def get_enrolled_students(course_id):
             }
             student_list.append(student_info)
     
-    logging.info(f"Găsiți {len(student_list)} studenți înrolați.")
+    logging.info(f"Gasiti {len(student_list)} studenti inrolati")
     return student_list
 
 def download_profile_image(url, student_id):
-    """Descarcă poza de profil a unui student"""
-    if not url or 'gravatar' in url:  # Skip default avatars
+    """Descarca poza de profil a unui student"""
+    if not url or 'gravatar' in url:  
         return None
     
     try:
         os.makedirs(PHOTOS_DIR, exist_ok=True)
         filename = f"{PHOTOS_DIR}/student_{student_id}.jpg"
         
-        # Adaugă token-ul Moodle la URL dacă e necesar
+        # Adauga token-ul Moodle la URL daca e necesar
         if MOODLE_TOKEN and 'token=' not in url:
             separator = '&' if '?' in url else '?'
             url = f"{url}{separator}token={MOODLE_TOKEN}"
         
         urllib.request.urlretrieve(url, filename)
-        logging.info(f"Poza descărcată pentru studentul ID {student_id}")
+        logging.info(f"Poza descarcata pentru studentul ID {student_id}")
         return filename
     except Exception as e:
-        logging.warning(f"Nu s-a putut descărca poza pentru studentul {student_id}: {e}")
+        logging.warning(f"Nu s-a putut descarca poza pentru studentul {student_id}: {e}")
         return None
 
 def sync_students_from_moodle():
-    """Sincronizează studenții din Moodle în baza de date locală"""
+    """Sincronizare studenti din Moodle in baza de date locala"""
     students = get_enrolled_students(COURSE_ID)
     if not students:
         return
@@ -163,13 +177,13 @@ def sync_students_from_moodle():
     c = conn.cursor()
     
     for student in students:
-        # Descarcă poza de profil
+        # Descarca poza de profil
         photo_path = None
         if student['profile_image_url']:
             photo_path = download_profile_image(student['profile_image_url'], student['id'])
         
-        # Inserează sau actualizează studentul
-        # Păstrează UID-ul existent
+        # Insereaza sau actualizeaza studentul
+        # Pastrează UID-ul existent
         c.execute("SELECT nfc_uid FROM studenti WHERE id = ?", (student['id'],))
         existing = c.fetchone()
         nfc_uid = existing[0] if existing else None
@@ -183,11 +197,11 @@ def sync_students_from_moodle():
     
     conn.commit()
     conn.close()
-    logging.info("Sincronizare studenți completă.")
+    logging.info("Sincronizare studenti completa")
 
 def get_attendance_sessions():
-    """Extrage sesiunile de prezență active din Moodle"""
-    # Găsește modulul de prezență
+    """Extrage sesiunile de prezenta active din Moodle"""
+    # Gaseste modulul de prezenta
     contents = call_moodle_function("core_course_get_contents", {"courseid": COURSE_ID})
     attendance_id = None
     
@@ -198,7 +212,7 @@ def get_attendance_sessions():
                 break
     
     if not attendance_id:
-        logging.warning("Nu s-a găsit modul de prezență în curs.")
+        logging.warning("Nu s-a gasit modul de prezenta în curs")
         return []
     
     # Extrage sesiunile
@@ -209,7 +223,7 @@ def get_attendance_sessions():
     return sessions
 
 def sync_attendance_sessions():
-    """Sincronizează sesiunile de prezență din Moodle"""
+    """Sincronizeaza sesiunile de prezenta din Moodle"""
     sessions = get_attendance_sessions()
     if not sessions:
         return
@@ -223,7 +237,7 @@ def sync_attendance_sessions():
         start_time = datetime.fromtimestamp(session["sessdate"])
         end_time = datetime.fromtimestamp(session["sessdate"] + session["duration"])
         
-        # Verifică dacă sesiunea este activă
+        # Verifica daca sesiunea este activa
         is_active = session["sessdate"] <= now <= (session["sessdate"] + session["duration"])
         
         c.execute('''INSERT OR REPLACE INTO sesiuni 
@@ -234,10 +248,10 @@ def sync_attendance_sessions():
     
     conn.commit()
     conn.close()
-    logging.info("Sincronizare sesiuni completă.")
+    logging.info("Sincronizare sesiuni completa")
 
 def get_active_session():
-    """Returnează sesiunea activă curentă"""
+    """Returneaza sesiunea activa curenta"""
     conn = sqlite3.connect(LOCAL_DB_FILE)
     c = conn.cursor()
     c.execute("SELECT * FROM sesiuni WHERE activa = 1 LIMIT 1")
@@ -246,26 +260,26 @@ def get_active_session():
     return session
 
 def mark_attendance_local(student_id, method="camera"):
-    """Marchează prezența în baza de date locală"""
+    """Marcheaza prezenta în baza de date locala"""
     active_session = get_active_session()
     if not active_session:
-        logging.warning("Nu există sesiune activă pentru a marca prezența.")
+        logging.warning("Nu exista sesiune activa pentru a marca prezenta")
         return False
     
     conn = sqlite3.connect(LOCAL_DB_FILE)
     c = conn.cursor()
     
-    # Verifică dacă studentul a fost deja marcat în această sesiune
+    # Verifica daca studentul a fost deja marcat în aceasta sesiune
     c.execute('''SELECT id FROM prezente 
                  WHERE student_id = ? AND sesiune_id = ?''',
               (student_id, active_session[0]))
     
     if c.fetchone():
-        logging.info(f"Studentul ID {student_id} a fost deja marcat prezent în această sesiune.")
+        logging.info(f"Studentul ID {student_id} a fost deja marcat prezent in aceasta sesiune")
         conn.close()
         return False
     
-    # Marchează prezența
+    # Marcheaza prezenta
     c.execute('''INSERT INTO prezente (student_id, sesiune_id, metoda_detectie)
                  VALUES (?, ?, ?)''',
               (student_id, active_session[0], method))
@@ -273,7 +287,7 @@ def mark_attendance_local(student_id, method="camera"):
     conn.commit()
     conn.close()
     
-    # Obține numele studentului pentru log
+    # Obtine numele studentului pentru log
     conn = sqlite3.connect(LOCAL_DB_FILE)
     c = conn.cursor()
     c.execute("SELECT nume, prenume FROM studenti WHERE id = ?", (student_id,))
@@ -281,13 +295,14 @@ def mark_attendance_local(student_id, method="camera"):
     conn.close()
     
     if student_info:
-        logging.info(f"[PREZENȚĂ ✅] {student_info[1]} {student_info[0]} marcat prezent prin {method}")
+        logging.info(f"[PREZENTA OK] {student_info[1]} {student_info[0]} marcat prezent prin {method}")
     
     return True
 
-# =================== NFC FUNCTION ===================
+# Functii NFC
 def read_nfc_uid():
-    """Citește UID-ul unui card NFC"""
+    """Citeste UID-ul unui card NFC"""
+    afiseaza_mesaj("Scanati cardul", 2)
     try:
         import board
         import busio
@@ -297,7 +312,7 @@ def read_nfc_uid():
         pn532 = adafruit_pn532.i2c.PN532_I2C(i2c, debug=False)
         pn532.SAM_configuration()
 
-        logging.info("Aștept card NFC...")
+        logging.info("Astept card NFC...")
         uid = pn532.read_passive_target(timeout=2)
         if uid:
             uid_str = uid.hex().upper()
@@ -311,7 +326,7 @@ def read_nfc_uid():
         return None
 
 def find_student_by_nfc(uid):
-    """Găsește un student după UID-ul NFC"""
+    """Gaseste un student după UID-ul NFC"""
     conn = sqlite3.connect(LOCAL_DB_FILE)
     c = conn.cursor()
     c.execute("SELECT id, nume, prenume FROM studenti WHERE nfc_uid = ?", (uid,))
@@ -319,46 +334,44 @@ def find_student_by_nfc(uid):
     conn.close()
     return student
 
-# =================== CAMERA INITIALIZATION ===================
+# Initializare camera
 def initialize_camera():
-    """Inițializează camera cu mai multe încercări și backend-uri diferite"""
-    logging.info("Încerc să inițializez camera...")
     
-    # Lista de backend-uri și indici de cameră de încercat
+    # Lista de backend-uri si indici de camera de testat
     backends = [cv2.CAP_V4L2, cv2.CAP_GSTREAMER, cv2.CAP_ANY]
     camera_indices = [0, 1, -1, '/dev/video0', '/dev/video1']
     
     for backend in backends:
         backend_name = {cv2.CAP_V4L2: "V4L2", cv2.CAP_GSTREAMER: "GStreamer", cv2.CAP_ANY: "ANY"}.get(backend, str(backend))
-        logging.info(f"Încerc backend-ul: {backend_name}")
+        logging.info(f"Incerc backend-ul: {backend_name}")
         
         for camera_index in camera_indices:
             try:
-                logging.info(f"  Încerc camera index: {camera_index}")
+                logging.info(f"  Incerc camera index: {camera_index}")
                 
-                # Pentru stringuri (path-uri de device), folosim doar CAP_V4L2
+                # Pentru stringuri, folosim doar CAP_V4L2
                 if isinstance(camera_index, str) and backend != cv2.CAP_V4L2:
                     continue
                 
                 cap = cv2.VideoCapture(camera_index, backend)
                 
                 if cap.isOpened():
-                    # Testează dacă putem citi un frame
+                    # Testeaza daca putem citi un frame
                     ret, frame = cap.read()
                     if ret and frame is not None:
-                        logging.info(f"✅ Camera inițializată cu succes: index {camera_index}, backend {backend_name}")
+                        logging.info(f" Camera initializata cu succes: index {camera_index}, backend {backend_name}")
                         
-                        # Setează proprietăți optime
+                        # Seteaza proprietati optime
                         cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
                         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
                         cap.set(cv2.CAP_PROP_FPS, 30)
                         
-                        # Verifică proprietățile setate
+                        # Verifica proprietatile setate
                         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
                         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
                         fps = int(cap.get(cv2.CAP_PROP_FPS))
                         
-                        logging.info(f"Rezoluție cameră: {width}x{height}, FPS: {fps}")
+                        
                         return cap
                     else:
                         logging.warning(f"  Camera {camera_index} s-a deschis dar nu poate citi frame-uri")
@@ -367,14 +380,14 @@ def initialize_camera():
                     logging.warning(f"  Nu pot deschide camera {camera_index}")
                     
             except Exception as e:
-                logging.warning(f"  Eroare la inițializarea camerei {camera_index}: {e}")
+                logging.warning(f"  Eroare la initializarea camerei {camera_index}: {e}")
                 continue
     
 
 
-# =================== FACE RECOGNITION SETUP ===================
+# Recunoastere faciala
 def load_face_data():
-    """Încarcă datele pentru recunoașterea facială din pozele studenților"""
+    """Incarca datele pentru recunoastere faciala"""
     detector = dlib.get_frontal_face_detector()
     predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
     recognizer = dlib.face_recognition_model_v1("dlib_face_recognition_resnet_model_v1.dat")
@@ -388,7 +401,7 @@ def load_face_data():
     students_with_photos = c.fetchall()
     conn.close()
     
-    logging.info("Încarc datele pentru recunoașterea facială...")
+    logging.info("Incarc datele pentru recunoasterea faciala...")
     
     for student_id, nume, prenume, photo_path in students_with_photos:
         if not os.path.exists(photo_path):
@@ -408,43 +421,46 @@ def load_face_data():
 
         faces.append(descriptor)
         student_ids.append(student_id)
-        logging.info(f"Încărcat: {prenume} {nume} (ID: {student_id})")
+        logging.info(f"Incarcat: {prenume} {nume} (ID: {student_id})")
     
     return detector, predictor, recognizer, faces, student_ids
 
-# =================== MAIN LOOP ===================
+# Main
 def main():
-    # Inițializare
+    log_si_lcd("Pornire sistem..", durata=2)
+    # Initializare
     init_database()
+
     
     # Sincronizare cu Moodle
-    logging.info("Sincronizez datele cu Moodle...")
     sync_students_from_moodle()
     sync_attendance_sessions()
+
     
     active_session = get_active_session()
     if not active_session:
-        logging.error("Nu există sesiune activă de prezență!")
+        log_si_lcd("Nu exista\nsesiune!",durata=2)
         return
     
-    logging.info(f"Sesiune activă: {active_session[2]} ({active_session[3]} - {active_session[4]})")
-    afiseaza_mesaj("Sesiune activa!")
+    logging.info(f"Sesiune activa: {active_session[2]} ({active_session[3]} - {active_session[4]})")
+    log_si_lcd("Sesiune activa!", durata=2)
     
-    # Încărcare date pentru recunoașterea facială
+    # Incarcare date pentru recunoasterea faciala
     try:
         detector, predictor, recognizer, faces, student_ids = load_face_data()
     except Exception as e:
-        logging.error(f"Eroare la încărcarea datelor pentru recunoașterea facială: {e}")
+        logging.error(f"Eroare la încarcarea datelor pentru recunoasterea faciala: {e}")
         return
     
     
-    # Inițializare cameră
+    # Initializare camera
     camera_result = initialize_camera()
+
     if camera_result is None:
-        logging.error("Nu pot accesa camera. Sistemul se oprește.")
+        logging.error("Nu pot accesa camera. Sistemul se opreste.")
         return
     
-    # Verifică dacă avem PiCamera sau OpenCV VideoCapture
+    # Verifica daca avem PiCamera sau OpenCV VideoCapture
     if isinstance(camera_result, tuple):
         # PiCamera
         camera, rawCapture = camera_result
@@ -459,7 +475,7 @@ def main():
     frame_count = 0
     studenti_marcati = set()
     
-    logging.info("Camera pornită. Sistem de prezență activ!")
+    logging.info("Camera pornita. Sistem de prezenta activ!")
     
     try:
         if use_picamera:
@@ -472,13 +488,13 @@ def main():
                 frame = cv2.flip(frame, 1)
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-                if frame_count % 5 == 0:  # Procesează la fiecare 5 cadre
+                if frame_count % 5 == 0:  # Proceseaza la fiecare 5 cadre
                     detected_faces = detector(gray)
                     for face in detected_faces:
                         shape = predictor(gray, face)
                         descriptor = recognizer.compute_face_descriptor(frame, shape)
 
-                        # Compară cu fețele cunoscute
+                        # Compara cu fetele cunoscute
                         if faces:
                             distances = [np.linalg.norm(np.array(descriptor) - np.array(f)) for f in faces]
                             min_dist = min(distances)
@@ -487,7 +503,7 @@ def main():
                             if min_dist < FACE_MATCH_THRESHOLD:
                                 student_id = student_ids[best_match_idx]
                                 
-                                # Obține informații despre student
+                                # Obtine informatii despre student
                                 conn = sqlite3.connect(LOCAL_DB_FILE)
                                 c = conn.cursor()
                                 c.execute("SELECT nume, prenume FROM studenti WHERE id = ?", (student_id,))
@@ -500,14 +516,14 @@ def main():
                                                    args=(student_id, "camera")).start()
                                     studenti_marcati.add(student_id)
                                     
-                                color = (0, 255, 0)  # Verde pentru recunoscut
+                                color = (0, 255, 0)  
                                 label = f"{student_info[1]} {student_info[0]}" if student_info else f"ID: {student_id}"
                             else:
-                                color = (0, 0, 255)  # Roșu pentru necunoscut
+                                color = (0, 0, 255)  
                                 label = "Necunoscut"
                                 
-                                # Încearcă citirea NFC pentru persoanele necunoscute
-                                logging.info("Persoană necunoscută detectată. Se încearcă citirea NFC...")
+                                # Incearca citirea NFC pentru persoanele necunoscute
+                                logging.info("Persoana necunoscuta detectata. Se încearca citirea NFC...")
                                 uid = read_nfc_uid()
                                 if not uid:
                                     sleep(1)
@@ -519,23 +535,23 @@ def main():
                                         studenti_marcati.add(student[0])
                                         nume_complet = f"{student[2]} {student[1]}"
                                         label = f"{nume_complet} (NFC)"
-                                        color = (255, 255, 0)  # Galben pentru NFC
+                                        color = (255, 255, 0) 
                                         afiseaza_mesaj(nume_complet)
 
                         else:
                             color = (0, 0, 255)
                             label = "Necunoscut"
 
-                        # Desenează dreptunghiul și eticheta
+                        # Deseneaza dreptunghiul și eticheta
                         cv2.rectangle(frame, (face.left(), face.top()), 
                                     (face.right(), face.bottom()), color, 2)
                         cv2.putText(frame, label, (face.left(), face.top() - 10), 
                                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
 
                 frame_count += 1
-                cv2.imshow("Sistem Prezență - Recunoaștere Facială", frame)
+                cv2.imshow("Sistem Prezenta - Recunoastere Faciala", frame)
                 
-                # Curăță buffer-ul pentru următorul frame
+                # Curata buffer-ul pentru urmatorul frame
                 rawCapture.truncate(0)
                 
                 if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -546,19 +562,19 @@ def main():
             while True:
                 ret, frame = cap.read()
                 if not ret:
-                    logging.error("Nu pot citi frame din cameră")
+                    logging.error("Nu pot citi frame din camera")
                     break
 
                 frame = cv2.flip(frame, 1)
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-                if frame_count % 5 == 0:  # Procesează la fiecare 5 cadre
+                if frame_count % 5 == 0:  # Proceseaza la fiecare 5 cadre
                     detected_faces = detector(gray)
                     for face in detected_faces:
                         shape = predictor(gray, face)
                         descriptor = recognizer.compute_face_descriptor(frame, shape)
 
-                        # Compară cu fețele cunoscute
+                        # Compara cu fetele cunoscute
                         if faces:
                             distances = [np.linalg.norm(np.array(descriptor) - np.array(f)) for f in faces]
                             min_dist = min(distances)
@@ -567,7 +583,7 @@ def main():
                             if min_dist < FACE_MATCH_THRESHOLD:
                                 student_id = student_ids[best_match_idx]
                                 
-                                # Obține informații despre student
+                                # Obtine informații despre student
                                 conn = sqlite3.connect(LOCAL_DB_FILE)
                                 c = conn.cursor()
                                 c.execute("SELECT nume, prenume FROM studenti WHERE id = ?", (student_id,))
@@ -581,15 +597,15 @@ def main():
                                     studenti_marcati.add(student_id)
                                     afiseaza_mesaj(name)
                                     
-                                color = (0, 255, 0)  # Verde pentru recunoscut
+                                color = (0, 255, 0)  
                                 label = f"{student_info[1]} {student_info[0]}" if student_info else f"ID: {student_id}"
                             else:
                                 afiseaza_mesaj("Scanati cardul!")
-                                color = (0, 0, 255)  # Roșu pentru necunoscut
+                                color = (0, 0, 255)  
                                 label = "Necunoscut"
                                 
-                                # Încearcă citirea NFC pentru persoanele necunoscute
-                                logging.info("Persoană necunoscută detectată. Se încearcă citirea NFC...")
+                                # Incearca citirea NFC pentru persoanele necunoscute
+                                logging.info("Persoana necunoscuta detectata. Se încearca citirea NFC...")
                                 uid = read_nfc_uid()
                                 if uid:
                                     student = find_student_by_nfc(uid)
@@ -599,21 +615,21 @@ def main():
                                         studenti_marcati.add(student[0])
                                         nume_complet = f"{student[2]} {student[1]}"
                                         label = f"{nume_complet} (NFC)"
-                                        color = (255, 255, 0)  # Galben pentru NFC
+                                        color = (255, 255, 0)  
                                         afiseaza_mesaj(nume_complet)
                         else:
                             afiseaza_mesaj("Student neidentificat!")
                             color = (0, 0, 255)
                             label = "Necunoscut"
 
-                        # Desenează dreptunghiul și eticheta
+                        # Deseneaza dreptunghiul si eticheta
                         cv2.rectangle(frame, (face.left(), face.top()), 
                                     (face.right(), face.bottom()), color, 2)
                         cv2.putText(frame, label, (face.left(), face.top() - 10), 
                                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
 
                 frame_count += 1
-                cv2.imshow("Sistem Prezență - Recunoaștere Facială", frame)
+                cv2.imshow("Sistem Prezenta - Recunoastere Faciala", frame)
                 
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
@@ -621,7 +637,7 @@ def main():
     except KeyboardInterrupt:
         logging.info("Sistem oprit de utilizator")
     except Exception as e:
-        logging.error(f"Eroare în bucla principală: {e}")
+        logging.error(f"Eroare în bucla principala: {e}")
     finally:
         # Curățare resurse
         if use_picamera:
@@ -629,7 +645,7 @@ def main():
         else:
             cap.release()
         cv2.destroyAllWindows()
-        logging.info("Sistem oprit și resurse curățate.")
+        logging.info("Sistem oprit si resurse curatate.")
 
 if __name__ == "__main__":
     main()
