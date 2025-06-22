@@ -14,6 +14,8 @@ import urllib.request
 from pathlib import Path
 from RPLCD.i2c import CharLCD
 from time import sleep
+from dotenv import load_dotenv
+
 
 # =================== LCD Setup ===================
 lcd = CharLCD(i2c_expander='PCF8574', address=0x27, port=1, cols=16, rows=2, charmap='A00', auto_linebreaks=True)
@@ -23,15 +25,20 @@ def afiseaza_mesaj(text, durata=3):
     lcd.write_string(text)
     sleep(durata)
     lcd.clear()
+    
+    
+load_dotenv()
 
 # =================== CONFIG ===================
-MOODLE_URL = "http://192.168.0.101/moodle/webservice/rest/server.php"
-MOODLE_TOKEN = os.getenv("MOODLE_TOKEN", "5a987e634310317873b8831b2faeaded")
-COURSE_ID = 2
-LOCAL_DB_FILE = "prezenta.db"
-FACE_MATCH_THRESHOLD = 0.6
-PHOTOS_DIR = "poze_moodle"
+MOODLE_URL = os.getenv("MOODLE_URL")
+MOODLE_TOKEN = os.getenv("MOODLE_TOKEN")
+COURSE_ID = int(os.getenv("COURSE_ID", 2))
+FACE_MATCH_THRESHOLD = float(os.getenv("FACE_MATCH_THRESHOLD", 0.6))
+PHOTOS_DIR = os.getenv("PHOTOS_DIR", "poze_moodle")
 
+
+
+LOCAL_DB_FILE = "prezenta.db"
 # =================== LOGGING ===================
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
@@ -162,11 +169,17 @@ def sync_students_from_moodle():
             photo_path = download_profile_image(student['profile_image_url'], student['id'])
         
         # Inserează sau actualizează studentul
+        # Păstrează UID-ul existent
+        c.execute("SELECT nfc_uid FROM studenti WHERE id = ?", (student['id'],))
+        existing = c.fetchone()
+        nfc_uid = existing[0] if existing else None
+
         c.execute('''INSERT OR REPLACE INTO studenti 
-                     (id, nume, prenume, email, poza_path, last_sync) 
-                     VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)''',
+                     (id, nume, prenume, email, nfc_uid, poza_path, last_sync) 
+                     VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)''',
                   (student['id'], student['nume'], student['prenume'], 
-                   student['email'], photo_path))
+                   student['email'], nfc_uid, photo_path))
+
     
     conn.commit()
     conn.close()
@@ -496,7 +509,9 @@ def main():
                                 # Încearcă citirea NFC pentru persoanele necunoscute
                                 logging.info("Persoană necunoscută detectată. Se încearcă citirea NFC...")
                                 uid = read_nfc_uid()
-                                if uid:
+                                if not uid:
+                                    sleep(1)
+                                    uid = read_nfc_uid()
                                     student = find_student_by_nfc(uid)
                                     if student and student[0] not in studenti_marcati:
                                         threading.Thread(target=mark_attendance_local, 
@@ -582,9 +597,10 @@ def main():
                                         threading.Thread(target=mark_attendance_local, 
                                                        args=(student[0], "nfc")).start()
                                         studenti_marcati.add(student[0])
-                                        label = f"{student[2]} {student[1]} (NFC)"
+                                        nume_complet = f"{student[2]} {student[1]}"
+                                        label = f"{nume_complet} (NFC)"
                                         color = (255, 255, 0)  # Galben pentru NFC
-                                        afiseaza_mesaj(name)
+                                        afiseaza_mesaj(nume_complet)
                         else:
                             afiseaza_mesaj("Student neidentificat!")
                             color = (0, 0, 255)
