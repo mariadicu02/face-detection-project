@@ -121,7 +121,7 @@ def call_moodle_function(function, params):
         return {}
 
 def get_enrolled_students(course_id):
-    """Extrage lista studenților înrolați în curs"""
+    """Extrage lista studentilor inrolati în curs"""
     logging.info("Extrag studentii inrolati din Moodle...")
     params = {'courseid': course_id}
     students = call_moodle_function("core_enrol_get_enrolled_users", params)
@@ -384,13 +384,12 @@ def initialize_camera():
                 continue
     
 
-
 # Recunoastere faciala
 def load_face_data():
     """Incarca datele pentru recunoastere faciala"""
     detector = dlib.get_frontal_face_detector()
-    predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
-    recognizer = dlib.face_recognition_model_v1("dlib_face_recognition_resnet_model_v1.dat")
+    predictor = dlib.shape_predictor("models/shape_predictor_68_face_landmarks.dat")
+    recognizer = dlib.face_recognition_model_v1("models/dlib_face_recognition_resnet_model_v1.dat")
     
     faces = []
     student_ids = []
